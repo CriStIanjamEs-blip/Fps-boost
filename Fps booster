@@ -1,0 +1,122 @@
+-- FPS Booster Script (Safe Version)
+-- No longer removes interactive or moving objects
+
+local Players = game:GetService("Players")
+local Lighting = game:GetService("Lighting")
+local LocalPlayer = Players.LocalPlayer
+
+-- ====================== SETTINGS ======================
+local Settings = {
+	NoShadows = true,
+	FlatNoTexture = true,
+	HideOtherPlayers = true,
+	DisableEffects = true,        -- Particles, Fire, Smoke, Trails...
+	LowQuality = true,
+	-- RemoveNoclipObjects is now DISABLED (safe)
+}
+
+-- ====================== LIGHTING & QUALITY ======================
+if Settings.LowQuality then
+	pcall(function()
+		settings().Rendering.QualityLevel = Enum.QualityLevel.Level01
+		settings().Rendering.MeshPartDetailLevel = Enum.MeshPartDetailLevel.Level01
+	end)
+end
+
+if Settings.NoShadows then
+	Lighting.GlobalShadows = false
+	Lighting.FogEnd = 9e9
+	Lighting.Brightness = 1
+
+	for _, effect in pairs(Lighting:GetDescendants()) do
+		if effect:IsA("BloomEffect") or effect:IsA("BlurEffect") or 
+		   effect:IsA("SunRaysEffect") or effect:IsA("DepthOfFieldEffect") or
+		   effect:IsA("ColorCorrectionEffect") or effect:IsA("Atmosphere") then
+			effect:Destroy()
+		end
+	end
+end
+
+-- ====================== MAIN OPTIMIZER ======================
+local function OptimizeObject(obj)
+	if not obj or not obj.Parent then return end
+
+	-- No Shadows
+	if Settings.NoShadows and obj:IsA("BasePart") then
+		obj.CastShadow = false
+	end
+
+	-- Flat + No Texture (works on everything, including interactive parts)
+	if Settings.FlatNoTexture then
+		if obj:IsA("BasePart") then
+			obj.Material = Enum.Material.SmoothPlastic
+			obj.Reflectance = 0
+
+			if obj:IsA("MeshPart") then
+				pcall(function()
+					obj.TextureID = ""
+					obj.RenderFidelity = Enum.RenderFidelity.Performance
+				end)
+			end
+		elseif obj:IsA("Decal") or obj:IsA("Texture") then
+			obj.Transparency = 1
+		elseif obj:IsA("SurfaceAppearance") then
+			obj:Destroy()
+		elseif obj:IsA("SpecialMesh") then
+			obj.TextureId = ""
+		end
+	end
+
+	-- Disable visual effects only
+	if Settings.DisableEffects then
+		if obj:IsA("ParticleEmitter") or obj:IsA("Trail") or obj:IsA("Beam") or
+		   obj:IsA("Fire") or obj:IsA("Smoke") or obj:IsA("Sparkles") then
+			obj.Enabled = false
+		end
+	end
+end
+
+-- Optimize everything currently in the game
+for _, obj in pairs(workspace:GetDescendants()) do
+	OptimizeObject(obj)
+end
+
+-- Optimize new objects that appear later
+workspace.DescendantAdded:Connect(function(obj)
+	task.defer(OptimizeObject, obj)
+end)
+
+-- ====================== HIDE OTHER PLAYERS ======================
+if Settings.HideOtherPlayers then
+	local function HideCharacter(character)
+		if not character then return end
+		for _, part in pairs(character:GetDescendants()) do
+			if part:IsA("BasePart") or part:IsA("Decal") or part:IsA("Texture") then
+				part.LocalTransparencyModifier = 1
+			elseif part:IsA("Accessory") or part:IsA("Shirt") or part:IsA("Pants") or part:IsA("ShirtGraphic") then
+				part:Destroy()
+			end
+		end
+	end
+
+	local function SetupPlayer(player)
+		if player == LocalPlayer then return end
+
+		player.CharacterAdded:Connect(function(char)
+			task.wait(0.3)
+			HideCharacter(char)
+		end)
+
+		if player.Character then
+			HideCharacter(player.Character)
+		end
+	end
+
+	for _, player in pairs(Players:GetPlayers()) do
+		SetupPlayer(player)
+	end
+
+	Players.PlayerAdded:Connect(SetupPlayer)
+end
+
+print("FPS Booster loaded (Safe Mode - interactive & moving objects kept)")
